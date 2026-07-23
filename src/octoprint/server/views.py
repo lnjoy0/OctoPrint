@@ -64,6 +64,22 @@ _valid_id_re = re.compile("[a-z_]+")
 _valid_div_re = re.compile("[a-zA-Z_-]+")
 
 
+def _preemptive_unless(base_url=None, additional_unless=None):
+    if base_url is None:
+        base_url = request.url_root
+
+    disabled_for_root = (
+        not settings().getBoolean(["devel", "cache", "preemptive"])
+        or base_url in settings().get(["server", "preemptiveCache", "exceptions"])
+        or not (base_url.startswith("http://") or base_url.startswith("https://"))
+    )
+
+    recording_disabled = g.get("preemptive_recording_active", False)
+
+    if callable(additional_unless):
+        return recording_disabled or disabled_for_root or additional_unless()
+    else:
+        return recording_disabled or disabled_for_root
 
 
 def _preemptive_data(
@@ -750,7 +766,7 @@ def index():
 
     response = None
 
-    forced_view = request.headers.get("X-Force-View", None)
+    forced_view = getattr(g, "preemptive_recording_view", None)
 
     if forced_view:
         # we have view forced by the preemptive cache
